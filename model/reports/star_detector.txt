@@ -1,0 +1,19 @@
+Star detector — held-out test set (60000 examples)
+ROC AUC: 0.9947
+
+              precision    recall  f1-score   support
+
+  not a star      0.963     0.967     0.965     30000
+        star      0.967     0.963     0.965     30000
+
+    accuracy                          0.965     60000
+   macro avg      0.965     0.965     0.965     60000
+weighted avg      0.965     0.965     0.965     60000
+
+Per kind (share classified correctly):
+  star           96.3%  (n=30000)
+  hot_pixel      96.9%  (n=5000)
+  noise          99.4%  (n=5000)
+  ground_light   94.3%  (n=10000)
+  trail          97.1%  (n=5000)
+  edge           98.2%  (n=5000)

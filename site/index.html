@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Starfix</title>
+<meta name="description" content="Find where a night-sky photo was taken using celestial navigation. Runs entirely in your browser.">
+<meta property="og:title" content="Starfix">
+<meta property="og:description" content="Drop in a star photo and find where on Earth it was taken.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one observing log, top to bottom — plate (photo + marks), when, fix readout, evidence */
+:root {
+  --sky: #0b1020;
+  --plate: #121a30;
+  --plate2: #151e38;
+  --rule: #26304d;
+  --ink: #e6e9f2;
+  --dim: #8e97b3;
+  --redlight: #ff5a4a;
+  --redsoft: rgba(255, 90, 74, .14);
+  --star: #f6e7b8;
+  --ok: #7fd4a8;
+  --oksoft: rgba(127, 212, 168, .14);
+  --auto: #8fb7ff;
+  --f-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body: "Instrument Sans", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--sky); color: var(--ink); }
+body { margin: 0; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+  background-image: radial-gradient(1px 1px at 12% 18%, var(--star) 50%, transparent 51%),
+    radial-gradient(1px 1px at 78% 9%, var(--star) 50%, transparent 51%),
+    radial-gradient(1.5px 1.5px at 64% 26%, var(--star) 50%, transparent 51%),
+    radial-gradient(1px 1px at 31% 6%, var(--dim) 50%, transparent 51%),
+    radial-gradient(1px 1px at 90% 33%, var(--dim) 50%, transparent 51%);
+  background-repeat: no-repeat;
+}
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 26px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font: 500 12px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--redlight); }
+h1 { font: 700 clamp(34px, 7vw, 56px)/1 var(--f-display); margin: 0; letter-spacing: -.02em; }
+.lede { color: var(--dim); margin: 4px 0 0; max-width: 62ch; }
+h2.sec { font: 500 12px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); margin: 0; }
+
+/* upload */
+.drop { position: relative; display: grid; place-items: center; text-align: center; gap: 10px; min-height: 200px; border: 1.5px dashed var(--rule); border-radius: 14px; background: var(--plate); cursor: pointer; padding: 28px 20px; transition: border-color .2s, background .2s; }
+.drop:hover, .drop.over, .drop:focus-within { border-color: var(--redlight); background: var(--plate2); }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.drop .reticle { width: 54px; height: 54px; }
+.drop strong { font: 600 18px var(--f-display); }
+.drop span { color: var(--dim); font-size: 13px; }
+
+/* plate viewer */
+.plate { display: grid; gap: 10px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.seg button { font: 500 13px var(--f-body); color: var(--dim); background: transparent; border: 0; padding: 8px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--plate2); color: var(--ink); box-shadow: inset 0 -2px 0 var(--redlight); }
+.seg button.vert[aria-pressed="true"] { box-shadow: inset 0 -2px 0 var(--ok); }
+.tb { font: 500 13px var(--f-body); color: var(--ink); background: transparent; border: 1px solid var(--rule); padding: 7px 12px; border-radius: 8px; cursor: pointer; }
+.tb:hover:not(:disabled), .tb:focus-visible, .seg button:focus-visible { border-color: var(--redlight); outline: none; }
+.tb:disabled { color: var(--dim); opacity: .5; cursor: default; }
+.chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+.spacer { flex: 1; }
+.wrap { position: relative; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #000; touch-action: none; }
+#view { display: block; width: 100%; height: auto; cursor: crosshair; }
+#loupe { position: absolute; top: 10px; left: 10px; width: 150px; height: 150px; border-radius: 50%; border: 2px solid var(--redlight); box-shadow: 0 6px 20px rgba(0,0,0,.6); pointer-events: none; background: #000; }
+.cap { font-size: 13px; color: var(--dim); margin: 0; }
+.cap b { color: var(--ink); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 12px 14px; align-items: end; }
+
+/* fields */
+.when { display: grid; grid-template-columns: 1.1fr 1fr 1fr 1.2fr auto; gap: 12px 14px; align-items: end; }
+@media (max-width: 760px) { .when { grid-template-columns: 1fr 1fr; } .when .go { grid-column: 1 / -1; } }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label { font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.field label em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .75; }
+.field input, .field select { font: 400 15px var(--f-mono); color: var(--ink); background: var(--plate); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; min-width: 0; width: 100%; }
+.field input:focus-visible, .field select:focus-visible { outline: none; border-color: var(--redlight); }
+.go { font: 600 15px var(--f-body); color: var(--sky); background: var(--redlight); border: 0; border-radius: 8px; padding: 11px 20px; cursor: pointer; white-space: nowrap; }
+.go:disabled { background: var(--rule); color: var(--dim); cursor: not-allowed; }
+.go:not(:disabled):hover, .go:focus-visible { filter: brightness(1.1); outline: 2px solid var(--star); outline-offset: 2px; }
+.hint { grid-column: 1 / -1; margin: 0; color: var(--dim); font-size: 13px; }
+
+.status { font: 500 13px var(--f-mono); color: var(--dim); display: flex; align-items: center; gap: 10px; min-height: 20px; }
+.status .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--redlight); animation: pulse 1.2s infinite; flex: none; }
+@keyframes pulse { 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .status .pulse { animation: none; } }
+.status.err { color: var(--redlight); }
+
+/* readout */
+.fix { display: grid; gap: 20px; border-top: 1px solid var(--rule); padding-top: 24px; }
+.fix.example { opacity: .6; }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag { font: 500 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; background: var(--redsoft); color: var(--redlight); }
+.tag.good { background: var(--oksoft); color: var(--ok); }
+.tag.mid { background: rgba(246,231,184,.12); color: var(--star); }
+.place { font: 700 clamp(26px, 5vw, 38px)/1.1 var(--f-display); margin: 0; text-wrap: balance; }
+.place small { display: block; font: 400 14px var(--f-body); color: var(--dim); margin-top: 6px; }
+.coords { font: 500 clamp(17px, 3vw, 22px) var(--f-mono); color: var(--star); font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.coords .pm { font-size: 14px; color: var(--dim); font-weight: 400; }
+.links { display: flex; gap: 8px; flex-wrap: wrap; }
+.links a, .links button { font: 500 13px var(--f-body); color: var(--ink); text-decoration: none; border: 1px solid var(--rule); border-radius: 8px; padding: 6px 12px; background: transparent; cursor: pointer; }
+.links a:hover, .links button:hover, .links a:focus-visible, .links button:focus-visible { border-color: var(--redlight); outline: none; }
+.note { margin: 0; max-width: 68ch; }
+.tip { margin: 0; max-width: 68ch; padding: 10px 14px; border-left: 2px solid var(--star); background: var(--plate); border-radius: 0 8px 8px 0; font-size: 14px; }
+.tip b { color: var(--star); }
+
+.stats { display: flex; flex-wrap: wrap; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin: 0; }
+.stat { flex: 1 1 150px; background: var(--sky); padding: 11px 14px; display: grid; gap: 2px; min-width: 0; align-content: start; }
+.stat dt { font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+.stat dd { margin: 0; font: 500 16px var(--f-body); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.g { color: var(--ok); } .m { color: var(--star); } .b { color: var(--redlight); }
+
+.charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
+.chart { display: grid; gap: 8px; min-width: 0; align-content: start; }
+canvas.c { width: 100%; max-width: 100%; display: block; border: 1px solid var(--rule); border-radius: 10px; background: var(--plate); }
+#zoom { aspect-ratio: 4 / 3; } #world { aspect-ratio: 2 / 1; }
+.legend { font-size: 12px; color: var(--dim); display: flex; gap: 14px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); background: var(--plate); }
+tr:last-child td { border-bottom: 0; }
+td.num { text-align: right; } th.num { text-align: right; }
+tr.off td { color: var(--dim); text-decoration: line-through; }
+tr.off td:last-child { text-decoration: none; }
+.src { font: 500 11px var(--f-mono); padding: 2px 6px; border-radius: 4px; }
+.src.claude { background: rgba(246,231,184,.12); color: var(--star); }
+.src.auto { background: rgba(143,183,255,.12); color: var(--auto); }
+
+.clues { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 640px) { .clues { grid-template-columns: 1fr; } }
+.clues section { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.clues ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.clues li { display: grid; gap: 2px; padding-left: 16px; position: relative; }
+.clues li::before { content: ""; position: absolute; left: 0; top: .55em; width: 6px; height: 6px; background: var(--star); transform: rotate(45deg); }
+.clues li b { font-weight: 600; }
+.clues li span { color: var(--dim); font-size: 14px; }
+.foot { color: var(--dim); font-size: 12px; max-width: 70ch; display: grid; gap: 6px; }
+.foot p { margin: 0; }
+.foot b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Celestial position fix</div>
+    <h1>Starfix</h1>
+    <p class="lede">Works out where a night-sky photo was taken, the way a ship's navigator would. It recognises the star pattern on its own, measures every star to a fraction of a pixel, and uses the horizon, the bending of starlight by the atmosphere, and the exact time to pin down latitude and longitude. Everything runs on your device; your photo is never uploaded.</p>
+  </header>
+
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-label="Choose a star photo">
+    <svg class="reticle" viewBox="0 0 54 54" fill="none" aria-hidden="true">
+      <circle cx="27" cy="27" r="20" stroke="var(--rule)" stroke-width="1.5"/>
+      <circle cx="27" cy="27" r="9" stroke="var(--redlight)" stroke-width="1.5"/>
+      <path d="M27 2v10M27 42v10M2 27h10M42 27h10" stroke="var(--dim)" stroke-width="1.5"/>
+      <circle cx="27" cy="27" r="2" fill="var(--star)"/>
+    </svg>
+    <div><strong id="dropTitle">Drop a star photo here</strong></div>
+    <span id="dropSub">or tap to choose · the original JPEG from your phone or camera works best</span>
+  </label>
+
+  <section class="plate" id="plate" hidden>
+    <div class="toolbar">
+      <div class="seg" role="group" aria-label="What to mark">
+        <button type="button" id="modeH" aria-pressed="true">Horizon points</button>
+        <button type="button" id="modeV" class="vert" aria-pressed="false">Vertical edges</button>
+      </div>
+      <button type="button" class="tb" id="undo" disabled>Undo</button>
+      <button type="button" class="tb" id="del" disabled>Delete point</button>
+      <button type="button" class="tb" id="clear" disabled>Clear marks</button>
+      <span class="spacer"></span>
+      <label class="chk"><input type="checkbox" id="snap" checked> Snap to edge</label>
+      <label class="chk"><input type="checkbox" id="labels" checked> Star names</label>
+      <button type="button" class="tb" id="replace">New photo</button>
+    </div>
+    <div class="wrap" id="wrap">
+      <canvas id="view" aria-label="Your photo. Tap to mark the horizon or vertical edges."></canvas>
+      <canvas id="loupe" width="300" height="300" hidden></canvas>
+    </div>
+    <p class="cap" id="cap"><b>Tap along the horizon</b> where sky meets land or sea, at least 2 points spread wide. Drag a point to adjust it while the magnifier shows the exact edge.</p>
+    <div class="row">
+      <div class="field" style="min-width:200px">
+        <label for="htype">Horizon is</label>
+        <select id="htype">
+          <option value="sea">Open sea or large lake</option>
+          <option value="flat" selected>Flat land or desert</option>
+          <option value="hills">Distant hills</option>
+          <option value="mountains">Mountains</option>
+          <option value="trees">Treeline</option>
+          <option value="buildings">Buildings or rooftops</option>
+        </select>
+      </div>
+      <div class="field" id="hgtField" hidden style="width:180px">
+        <label for="hgt">Camera above sea <em>m</em></label>
+        <input type="number" id="hgt" min="0" max="5000" step="1" value="2">
+      </div>
+    </div>
+  </section>
+
+  <form class="when" id="when" novalidate>
+    <div class="field">
+      <label for="d">Date taken</label>
+      <input type="date" id="d" required>
+    </div>
+    <div class="field">
+      <label for="t">Local time</label>
+      <input type="time" id="t" step="1">
+    </div>
+    <div class="field">
+      <label for="tz">Time zone</label>
+      <select id="tz"></select>
+    </div>
+    <div class="field">
+      <label for="acc">Time is accurate to</label>
+      <select id="acc">
+        <option value="2">The second (phone clock)</option>
+        <option value="30">About 30 seconds</option>
+        <option value="120">About 2 minutes</option>
+        <option value="600" selected>About 10 minutes</option>
+        <option value="3600">About an hour</option>
+      </select>
+    </div>
+    <button class="go" id="go" type="submit" disabled>Find location</button>
+    <p class="hint">Latitude comes from the stars and horizon alone. Longitude needs the time and its UTC offset (including daylight saving): every 4 minutes of clock error moves the answer about 100 km east or west.</p>
+  </form>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <article class="fix example" id="example">
+    <div class="tags"><span class="tag good">Example · Precise</span></div>
+    <h2 class="place">Badwater Basin, Death Valley, USA<small>Sky fix from 23 stars and a desert horizon</small></h2>
+    <div class="coords"><span>36.2304° N, 116.7671° W</span><span class="pm">± 9 km N–S · ± 11 km E–W</span></div>
+    <dl class="stats">
+      <div class="stat"><dt>Stars used</dt><dd>23</dd></div>
+      <div class="stat"><dt>Fit error</dt><dd class="g">0.9′</dd></div>
+      <div class="stat"><dt>Field of view</dt><dd>71° × 56°</dd></div>
+      <div class="stat"><dt>Horizon</dt><dd>7 points</dd></div>
+    </dl>
+  </article>
+
+  <article class="fix" id="fix" hidden>
+    <div class="tags" id="tags"></div>
+    <h2 class="place" id="place"></h2>
+    <div class="coords" id="coords"></div>
+    <div class="links" id="links"></div>
+    <p class="note" id="note" hidden></p>
+    <p class="tip" id="tip" hidden></p>
+    <dl class="stats" id="stats"></dl>
+    <div class="charts" id="charts">
+      <div class="chart">
+        <h2 class="sec">Close up</h2>
+        <canvas class="c" id="zoom" width="1200" height="900" aria-label="Close-up map grid with the estimated position and its uncertainty"></canvas>
+        <div class="legend" id="zoomLegend"></div>
+      </div>
+      <div class="chart">
+        <h2 class="sec">On the globe</h2>
+        <canvas class="c" id="world" width="1200" height="600" aria-label="World latitude and longitude grid with the estimated position"></canvas>
+      </div>
+    </div>
+    <section class="chart" id="starSec">
+      <h2 class="sec">Stars measured</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Star</th><th>Constellation</th><th>Found by</th><th class="num">Mag</th><th class="num">Fit error</th><th>Use</th></tr></thead>
+        <tbody id="starRows"></tbody>
+      </table></div>
+    </section>
+    <div class="clues">
+      <section><h2 class="sec">In the sky</h2><ul id="skyClues"></ul></section>
+      <section><h2 class="sec">Camera and level</h2><ul id="groundClues"></ul></section>
+    </div>
+  </article>
+
+  <div class="foot">
+    <p><b>How it works.</b> The page finds every point of light and measures its centre to a fraction of a pixel. It recognises the star pattern by matching the shapes of star triangles against a built-in catalog of 230 navigational stars, trying focal lengths until the whole field lines up. Then a single joint fit solves the camera, the direction of straight up and the height of the terrain on the horizon together. Starlight near the horizon is bent upward by the atmosphere by a known amount, so the low stars act as a second spirit level that doesn't care about hills. Where straight up points among the stars at the moment the photo was taken is your latitude and longitude.</p>
+    <p><b>Trained models.</b> Two small models, trained in Python on simulated night skies, run in your browser. A star detector (a neural network trained on 150,000 examples) sets aside hot pixels, noise, lights, trails and tree edges before the pattern is recognised. An accuracy model (gradient-boosted trees trained on 40,000 simulated photos run through this solver) turns the fit's diagnostics into the ± you see.</p>
+    <p>Everything runs in your browser; your photo is never uploaded. Planet positions load from the open-source astronomy-engine library when available.</p>
+  </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/astronomy.browser.min.js"></script>
+<script src="ml.js"></script>
+<script src="solver.js"></script>
+<script src="platesolve.js"></script>
+<script src="fallback.js"></script>
+<script src="cities.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

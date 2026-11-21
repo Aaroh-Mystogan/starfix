@@ -1,0 +1,17 @@
+Accuracy model — trained on 27200 simulated photos, calibrated on 4800, tested on 8000
+
+north-south:
+  inside 2 sigma   learned  93.2%   hand-tuned  90.7%
+  median sigma     learned   42.9 km  hand-tuned   47.2 km
+  rank correlation between predicted sigma and actual error: learned 0.751   hand-tuned 0.696
+
+  most informative: log formal N-S km (70%), terrain sigma (12%), vertical edges (6%), |terrain height| (3%), camera altitude (3%), hills (1%)
+
+east-west:
+  inside 2 sigma   learned  93.4%   hand-tuned  93.5%
+  median sigma     learned   85.1 km  hand-tuned   81.4 km
+  rank correlation between predicted sigma and actual error: learned 0.760   hand-tuned 0.720
+
+  most informative: log formal E-W km (79%), terrain sigma (10%), |terrain height| (2%), camera altitude (2%), log formal N-S km (1%), vertical edges (1%)
+
+Actual position error across the test photos: median 70 km, best quarter under 24 km, worst tenth over 436 km
